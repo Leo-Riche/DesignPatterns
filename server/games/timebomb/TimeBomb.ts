@@ -1,9 +1,11 @@
-// server/games/timebomb.js
+import { ITimeBombPhase, ITimeBombContext } from './states/ITimeBombPhase';
+import { AnnouncementPhase } from './states/AnnouncementPhase';
+import { FinishedPhase } from './states/FinishedPhase';
 
 const availableSherlockCards = ['Sherlock1', 'Sherlock2', 'Sherlock3', 'Sherlock4', 'Sherlock5', 'Sherlock1', 'Sherlock2'];
 const availableMoriartyCards = ['Moriarty1', 'Moriarty2', 'Moriarty3', 'Moriarty1'];
 
-const shuffle = (array) => {
+export const shuffle = (array: any[]) => {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
@@ -11,100 +13,7 @@ const shuffle = (array) => {
   return array;
 };
 
-interface ITimeBombPhase {
-  handleAction(playerId: string, actionType: string, payload: any): void;
-}
-
-class AnnouncementPhase implements ITimeBombPhase {
-  constructor(private game: TimeBomb) {}
-
-  handleAction(playerId: string, actionType: string, payload: any) {
-    if (actionType === 'announce') {
-      const { defuses, hasBomb } = payload;
-      const player = this.game.state.players.find((p: any) => p.id === playerId);
-      if (!player) return;
-
-      this.game.state.announcements[player.name] = { defuses, hasBomb };
-      
-      const allAnnounced = Object.keys(this.game.state.announcements).length === this.game.state.players.length;
-      
-      if (allAnnounced) {
-        for (const [name, annVal] of Object.entries(this.game.state.announcements)) {
-          const ann = annVal as any;
-          const bombText = ann.hasBomb ? " et prétend avoir la BOMBE 💥" : "";
-          this.game.io.to(this.game.roomCode).emit('action_log', `📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
-        }
-        this.game.setPhase(new PlayingPhase(this.game));
-      }
-      this.game.broadcastState();
-    }
-  }
-}
-
-class PlayingPhase implements ITimeBombPhase {
-  constructor(private game: TimeBomb) {}
-
-  handleAction(playerId: string, actionType: string, payload: any) {
-    if (actionType === 'cut') {
-      const { targetId, cardIndex } = payload;
-      
-      if (this.game.state.status !== 'playing') return;
-      if (this.game.state.isRedistributing) return;
-  
-      const currentShooter = this.game.state.players.find((p: any) => p.hasScissors);
-      if (!currentShooter || currentShooter.id !== playerId) return;
-  
-      if (targetId === this.game.state.lastShooterId) return;
-  
-      const targetPlayer = this.game.state.players.find((p: any) => p.id === targetId);
-      const card = targetPlayer.hand[cardIndex];
-  
-      if (card.isRevealed) return;
-  
-      // 1. On révèle la carte
-      card.isRevealed = true;
-      this.game.state.turnCuts++;
-  
-      // 2. On mémorise l'ID du tireur AVANT de transférer les ciseaux
-      this.game.state.lastShooterId = currentShooter.id;
-  
-      // 3. Transfert des ciseaux
-      this.game.state.players.forEach((p: any) => p.hasScissors = false);
-      targetPlayer.hasScissors = true;
-  
-      this.game.io.to(this.game.roomCode).emit('action_log', `${currentShooter.name} a coupé chez ${targetPlayer.name} !`);
-  
-      // 4. Vérification des conditions de victoire
-      if (card.type === 'bomb') {
-        this.game.endGame('Moriarty', '💥 BOUM ! La bombe a explosé.');
-        return;
-      } else if (card.type === 'defuse') {
-        this.game.state.defusesFound++;
-        if (this.game.state.defusesFound === this.game.state.totalDefuses) {
-          this.game.endGame('Sherlock', '✅ Tous les câbles ont été désamorcés !');
-          return;
-        }
-      }
-  
-      // 5. Vérification de fin de manche
-      if (this.game.state.turnCuts === this.game.state.players.length) {
-        this.game.state.isRedistributing = true;
-        this.game.io.to(this.game.roomCode).emit('action_log', `Fin de la manche ${this.game.state.round}. Redistribution...`);
-        setTimeout(() => this.game.startNextRound(), 2500);
-      } 
-  
-      this.game.broadcastState();
-    }
-  }
-}
-
-class FinishedPhase implements ITimeBombPhase {
-  handleAction(playerId: string, actionType: string, payload: any) {
-    // La partie est terminée, aucune action n'est permise
-  }
-}
-
-class TimeBomb {
+export class TimeBomb implements ITimeBombContext {
   roomCode: string;
   players: any[];
   io: any;
@@ -178,7 +87,7 @@ class TimeBomb {
     const startingPlayerIndex = Math.floor(Math.random() * nbPlayers);
 
     // 3. Distribution initiale (Manche 1)
-    this.state.players = this.players.map((p, index) => {
+    this.state.players = this.players.map((p: any, index: number) => {
       const specificRoleCard = assignedRoleCards[index];
       const roleType = specificRoleCard.startsWith('Sherlock') ? 'Sherlock' : 'Moriarty';
 
@@ -214,9 +123,9 @@ class TimeBomb {
       return this.endGame('Moriarty', '⏳ Le temps est écoulé, la bombe explose !');
     }
 
-    let newDeck = [];
-    this.state.players.forEach(p => {
-      p.hand.forEach(c => {
+    let newDeck: string[] = [];
+    this.state.players.forEach((p: any) => {
+      p.hand.forEach((c: any) => {
         if (!c.isRevealed) newDeck.push(c.type);
       });
       p.hand = []; 
@@ -225,7 +134,7 @@ class TimeBomb {
     newDeck = shuffle(newDeck);
 
     const cardsPerPlayer = newDeck.length / this.state.players.length;
-    this.state.players.forEach(p => {
+    this.state.players.forEach((p: any) => {
       p.hand = newDeck.splice(0, cardsPerPlayer).map(type => ({ type, isRevealed: false }));
     });
 
@@ -245,11 +154,11 @@ class TimeBomb {
   endGame(winner: string, reason: string) {
     this.setPhase(new FinishedPhase());
     this.state.status = 'finished';
-    this.state.players.forEach(p => {
-      p.hand.forEach(c => c.isRevealed = true);
+    this.state.players.forEach((p: any) => {
+      p.hand.forEach((c: any) => c.isRevealed = true);
     });
     
-    const revealedPlayers = this.state.players.map(p => ({
+    const revealedPlayers = this.state.players.map((p: any) => ({
       name: p.name,
       role: p.role
     }));
@@ -261,14 +170,14 @@ class TimeBomb {
   broadcastState() {
     const allAnnounced = Object.keys(this.state.announcements).length === this.state.players.length;
 
-    this.state.players.forEach(player => {
+    this.state.players.forEach((player: any) => {
       const opponents = this.state.players
-        .filter(p => p.id !== player.id)
-        .map(p => ({
+        .filter((p: any) => p.id !== player.id)
+        .map((p: any) => ({
           id: p.id,
           name: p.name,
           hasScissors: p.hasScissors,
-          hand: p.hand.map(c => c.isRevealed ? c : { type: 'hidden', isRevealed: false })
+          hand: p.hand.map((c: any) => c.isRevealed ? c : { type: 'hidden', isRevealed: false })
         }));
 
       this.io.to(player.id).emit('update_board_state', {
@@ -288,10 +197,10 @@ class TimeBomb {
     });
   }
 
-  reconnectPlayer(newSocketId, playerName) {
+  reconnectPlayer(newSocketId: string, playerName: string) {
     if (this.state.status !== 'playing') return false;
 
-    const player = this.state.players.find(p => p.name === playerName);
+    const player = this.state.players.find((p: any) => p.name === playerName);
     
     if (player) {
       player.id = newSocketId;
@@ -301,4 +210,3 @@ class TimeBomb {
   }
 }
 
-export default TimeBomb;

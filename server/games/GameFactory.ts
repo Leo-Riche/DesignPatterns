@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { IGame, PlayerData, GameOptions, GameConstructor } from './IGame';
 
-import TimeBomb from './timebomb';
+import { TimeBomb } from './timebomb/TimeBomb';
 import LoupGarou from './loupgarou';
 import Qwixx from './qwixx';
 
