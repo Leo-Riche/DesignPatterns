@@ -120,13 +120,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { io } from 'socket.io-client'
+import { SocketService } from '@/services/SocketService'
 import QwixxScoreSheet from '@/components/QwixxScoreSheet.vue'
 
 const route = useRoute()
 const router = useRouter()
-const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-const socket = io(socketUrl)
+const socket = SocketService.getInstance()
 const roomCode = route.params.id
 
 interface Player {
