@@ -38,14 +38,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { io } from 'socket.io-client'
 import BaseInput from '@/components/BaseInput.vue'
 import BaseButton from '@/components/BaseButton.vue'
+import { SocketService } from '@/services/SocketService'
 
 const router = useRouter()
 
-const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const socket = io(socketUrl)
+const socket = SocketService.getInstance()
 
 const playerName = ref('')
 const roomCode = ref('')

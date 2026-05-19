@@ -90,15 +90,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { io } from 'socket.io-client'
+import { SocketService } from '@/services/SocketService'
 import TimeBombLobbyWait from './TimeBombLobbyWait.vue'
 import TimeBombActiveBoard from './TimeBombActiveBoard.vue' 
 import BaseButton from '@/components/BaseButton.vue'
 
 const route = useRoute()
 const router = useRouter()
-const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-const socket = io(socketUrl)
+const socket = SocketService.getInstance()
 const roomCode = route.params.id as string
 
 interface Player {
