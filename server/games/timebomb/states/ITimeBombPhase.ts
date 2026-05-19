@@ -3,11 +3,11 @@ export interface ITimeBombPhase {
 }
 
 export interface ITimeBombContext {
-  roomCode: string;
-  io: any;
   state: any;
   setPhase(phase: ITimeBombPhase): void;
   broadcastState(): void;
   startNextRound(): void;
   endGame(winner: string, reason: string): void;
+  /** Envoie un message de log à tous les observateurs */
+  log(message: string): void;
 }

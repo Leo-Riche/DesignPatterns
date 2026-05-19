@@ -18,7 +18,7 @@ export class AnnouncementPhase implements ITimeBombPhase {
         for (const [name, annVal] of Object.entries(this.game.state.announcements)) {
           const ann = annVal as any;
           const bombText = ann.hasBomb ? " et prétend avoir la BOMBE 💥" : "";
-          this.game.io.to(this.game.roomCode).emit('action_log', `📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
+          this.game.log(`📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
         }
         this.game.setPhase(new PlayingPhase(this.game));
       }

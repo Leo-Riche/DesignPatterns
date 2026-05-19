@@ -31,7 +31,7 @@ export class PlayingPhase implements ITimeBombPhase {
       this.game.state.players.forEach((p: any) => p.hasScissors = false);
       targetPlayer.hasScissors = true;
   
-      this.game.io.to(this.game.roomCode).emit('action_log', `${currentShooter.name} a coupé chez ${targetPlayer.name} !`);
+      this.game.log(`${currentShooter.name} a coupé chez ${targetPlayer.name} !`);
   
       // 4. Vérification des conditions de victoire
       if (card.type === 'bomb') {
@@ -48,7 +48,7 @@ export class PlayingPhase implements ITimeBombPhase {
       // 5. Vérification de fin de manche
       if (this.game.state.turnCuts === this.game.state.players.length) {
         this.game.state.isRedistributing = true;
-        this.game.io.to(this.game.roomCode).emit('action_log', `Fin de la manche ${this.game.state.round}. Redistribution...`);
+        this.game.log(`Fin de la manche ${this.game.state.round}. Redistribution...`);
         setTimeout(() => this.game.startNextRound(), 2500);
       } 
   
