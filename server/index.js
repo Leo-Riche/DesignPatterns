@@ -3,9 +3,7 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const TimeBomb = require('./games/timebomb');
-const LoupGarou = require('./games/loupgarou');
-const Qwixx = require('./games/qwixx');
+const { GameFactory } = require('./games/GameFactory');
 
 const app = express();
 app.use(cors());
@@ -96,9 +94,9 @@ io.on('connection', (socket) => {
         return { id: id, name: s.playerName || "Anonyme" };
     });
 
-    const game = new TimeBomb(cleanRoomCode, playersData, io);
+    const game = GameFactory.create('timebomb', cleanRoomCode, playersData, io);
     activeGames[cleanRoomCode] = game;
-    
+
     game.start();
   });
 
@@ -138,7 +136,7 @@ io.on('connection', (socket) => {
         return { id: id, name: s.playerName || "Anonyme" };
     });
 
-    const game = new LoupGarou(cleanRoomCode, playersData, io, roleComposition);
+    const game = GameFactory.create('loupgarou', cleanRoomCode, playersData, io, { roleComposition });
     activeGames[cleanRoomCode] = game;
     
     io.to(cleanRoomCode).emit('game_started');
@@ -149,7 +147,7 @@ io.on('connection', (socket) => {
     const { roomCode, actionType, targetId } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
-    if (game && game instanceof LoupGarou) {
+    if (game) {
       game.handleAction(socket.id, actionType, targetId);
     }
   });
@@ -167,7 +165,7 @@ io.on('connection', (socket) => {
         return { id: id, name: s.playerName || "Anonyme" };
     });
 
-    const game = new Qwixx(cleanRoomCode, playersData, io);
+    const game = GameFactory.create('qwixx', cleanRoomCode, playersData, io);
     activeGames[cleanRoomCode] = game;
     
     game.start();
@@ -177,7 +175,7 @@ io.on('connection', (socket) => {
     const { roomCode, actionType, payload } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
-    if (game && game instanceof Qwixx) {
+    if (game) {
       game.handleAction(socket.id, actionType, payload);
     }
   });
