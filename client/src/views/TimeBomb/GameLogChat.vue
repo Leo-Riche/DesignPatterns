@@ -24,17 +24,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 
-const props = defineProps({
-  messages: Array 
-});
+interface GameMessage {
+  type: string;
+  text: string;
+  sender?: string;
+  timestamp: Date;
+}
+
+const props = defineProps<{
+  messages?: GameMessage[];
+}>();
 
 const emit = defineEmits(['send']);
 
 const newMessage = ref('');
-const messagesHistoryContainer = ref(null);
+const messagesHistoryContainer = ref<HTMLElement | null>(null);
 const sendMessage = () => {
   if (!newMessage.value.trim()) return;
   emit('send', newMessage.value);

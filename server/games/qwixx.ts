@@ -3,7 +3,12 @@
 const rollDie = () => Math.floor(Math.random() * 6) + 1;
 
 class Qwixx {
-  constructor(roomCode, playersData, io) {
+  roomCode: string;
+  players: any[];
+  io: any;
+  state: any;
+
+  constructor(roomCode: string, playersData: any[], io: any) {
     this.roomCode = roomCode;
     this.io = io;
     this.players = playersData;
@@ -219,4 +224,4 @@ class Qwixx {
   }
 }
 
-module.exports = Qwixx;
+export default Qwixx;

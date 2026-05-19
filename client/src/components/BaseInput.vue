@@ -10,14 +10,14 @@
         :placeholder="placeholder"
         :disabled="disabled"
         class="base-input"
-        @input="$emit('update:modelValue', $event.target.value)"
+        @input="$emit('update:modelValue', ($event.target as any).value)"
       />
       <span class="focus-border"></span>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 defineProps({
   label: String,
   modelValue: [String, Number],

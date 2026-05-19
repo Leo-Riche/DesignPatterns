@@ -12,7 +12,12 @@ const shuffle = (array) => {
 };
 
 class TimeBomb {
-  constructor(roomCode, playersData, io) {
+  roomCode: string;
+  players: any[];
+  io: any;
+  state: any;
+
+  constructor(roomCode: string, playersData: any[], io: any) {
     this.roomCode = roomCode;
     this.io = io;
     this.players = playersData; 
@@ -152,7 +157,8 @@ class TimeBomb {
     const allAnnounced = Object.keys(this.state.announcements).length === this.state.players.length;
     
     if (allAnnounced) {
-      for (const [name, ann] of Object.entries(this.state.announcements)) {
+      for (const [name, annVal] of Object.entries(this.state.announcements)) {
+        const ann = annVal as any;
         const bombText = ann.hasBomb ? " et prétend avoir la BOMBE 💥" : "";
         this.io.to(this.roomCode).emit('action_log', `📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
       }
@@ -253,4 +259,4 @@ class TimeBomb {
   }
 }
 
-module.exports = TimeBomb;
+export default TimeBomb;

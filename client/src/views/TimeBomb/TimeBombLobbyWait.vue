@@ -6,7 +6,7 @@
     </button>
     
     <div class="players-list-container">
-      <h3>Joueurs connectés ({{ players.length }}) :</h3>
+      <h3>Joueurs connectés ({{ players ? players.length : 0 }}) :</h3>
       <ul class="players-list">
         <li v-for="p in players" :key="p.id" :class="{ 'is-me': p.id === socketId }">
           👤 {{ p.name }} {{ p.id === socketId ? '(Moi)' : '' }}
@@ -15,15 +15,15 @@
     </div>
 
     <div v-if="amIHost">
-      <p v-if="players.length < 4" class="info-msg">
+      <p v-if="players && players.length < 4" class="info-msg">
         Attends au moins un autre joueur...
       </p>
-      <p v-if="players.length > 10" class="info-msg">
+      <p v-if="players && players.length > 10" class="info-msg">
         Il y a trop de joueurs (max 10) ! Certains devront partir...
       </p>
       <BaseButton 
         variant="primary" 
-        :disabled="players.length < 4 || players.length > 10" 
+        :disabled="players ? players.length < 4 || players.length > 10 : true" 
         @click="$emit('start')"
       >
         LANCER LA PARTIE 🚀
@@ -36,7 +36,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import BaseButton from '@/components/BaseButton.vue'
 import { ref } from 'vue';
 
@@ -58,12 +58,17 @@ const copyJoinLink = async () => {
   }
 }
 
-const props = defineProps({
-  roomCode: String,
-  players: Array,
-  socketId: String,
-  amIHost: Boolean
-});
+interface Player {
+  id: string;
+  name: string;
+}
+
+const props = defineProps<{
+  roomCode?: string;
+  players?: Player[];
+  socketId?: string;
+  amIHost?: boolean;
+}>();
 
 defineEmits(['start']);
 </script>

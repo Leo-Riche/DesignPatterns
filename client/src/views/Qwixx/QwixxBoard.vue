@@ -117,7 +117,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
@@ -129,8 +129,22 @@ const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const socket = io(socketUrl)
 const roomCode = route.params.id
 
+interface Player {
+  id: string;
+  name: string;
+  isHost?: boolean;
+  scoreSheet?: any;
+  score?: number;
+}
+
+interface Cell {
+  color: string;
+  value: number;
+  source?: string;
+}
+
 // Waiting Room State
-const allConnectedPlayers = ref([])
+const allConnectedPlayers = ref<Player[]>([])
 const amIHost = ref(false)
 
 // Game State
@@ -138,18 +152,18 @@ const gameStatus = ref('waiting')
 const phase = ref('rolling')
 const dice = ref({ w1:0, w2:0, red:0, yellow:0, green:0, blue:0 })
 const lockedColors = ref({ red:false, yellow:false, green:false, blue:false })
-const players = ref([])
-const activePlayerId = ref(null)
-const readyPlayers = ref([])
-const myId = ref(null)
+const players = ref<Player[]>([])
+const activePlayerId = ref<string | null>(null)
+const readyPlayers = ref<string[]>([])
+const myId = ref<string | null>(null)
 
-const gameLogs = ref([])
+const gameLogs = ref<string[]>([])
 const animatingDice = ref(false)
-const selectedCells = ref([])
+const selectedCells = ref<Cell[]>([])
 
 // End Game
 const winReason = ref('')
-const finalPlayers = ref([])
+const finalPlayers = ref<Player[]>([])
 
 // Computed
 const myName = computed(() => {
@@ -180,7 +194,7 @@ const hasSubmittedTurn = computed(() => {
 })
 
 // Validation Logic for Selected Cells
-const onToggleCell = ({ color, value }) => {
+const onToggleCell = ({ color, value }: { color: 'red' | 'yellow' | 'green' | 'blue', value: number }) => {
   // Check if cell is already selected
   const existingIdx = selectedCells.value.findIndex(c => c.color === color && c.value === value);
   if (existingIdx !== -1) {
@@ -222,13 +236,18 @@ const onToggleCell = ({ color, value }) => {
     const c1 = selectedCells.value[0];
     const c2 = { color, value };
     
+    if (!c1) return;
+    
+    const c1Color = c1.color as 'red' | 'yellow' | 'green' | 'blue';
+    const c2Color = c2.color as 'red' | 'yellow' | 'green' | 'blue';
+
     const isW1Valid = c1.value === wSum;
     const isW2Valid = c2.value === wSum;
     
-    const isC1Valid = c1.value === (dice.value.w1 + dice.value[c1.color]) || c1.value === (dice.value.w2 + dice.value[c1.color]);
-    const isC2Valid = c2.value === (dice.value.w1 + dice.value[c2.color]) || c2.value === (dice.value.w2 + dice.value[c2.color]);
+    const isC1Valid = c1.value === (dice.value.w1 + dice.value[c1Color]) || c1.value === (dice.value.w2 + dice.value[c1Color]);
+    const isC2Valid = c2.value === (dice.value.w1 + dice.value[c2Color]) || c2.value === (dice.value.w2 + dice.value[c2Color]);
     
-    const checkOrder = (whiteCell, colorCell) => {
+    const checkOrder = (whiteCell: Cell, colorCell: Cell) => {
         if (whiteCell.color !== colorCell.color) return true;
         if (whiteCell.color === 'red' || whiteCell.color === 'yellow') return whiteCell.value < colorCell.value;
         return whiteCell.value > colorCell.value;
@@ -264,7 +283,7 @@ onMounted(() => {
     router.push('/');
   });
 
-  socket.on('update_players_list', (pls) => {
+  socket.on('update_players_list', (pls: Player[]) => {
     allConnectedPlayers.value = pls;
     const me = pls.find(p => p.id === socket.id);
     if (me) {
@@ -307,7 +326,7 @@ onMounted(() => {
     myId.value = data.myId;
   });
 
-  socket.on('action_log', (msg) => { 
+  socket.on('action_log', (msg: string) => { 
     gameLogs.value.unshift(msg);
     if(gameLogs.value.length > 5) gameLogs.value.pop();
   });
@@ -335,7 +354,7 @@ const rollDice = () => {
   socket.emit('qwixx_action', { roomCode, actionType: 'roll' });
 }
 
-const submitTurn = (takePenalty) => {
+const submitTurn = (takePenalty: boolean) => {
   if (takePenalty && !isActivePlayer.value) return; // Cannot take penalty if not active
   
   if (takePenalty) {

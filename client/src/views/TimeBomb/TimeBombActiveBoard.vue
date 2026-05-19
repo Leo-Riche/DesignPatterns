@@ -58,7 +58,7 @@
           ⏳ Redistribution en cours...
         </div>
         <div v-else-if="!allAnnounced" class="turn-indicator waiting">
-          ⏳ En attente des annonces ({{ Object.keys(announcements).length }} / {{ otherPlayers.length + 1 }})...
+          ⏳ En attente des annonces ({{ announcements ? Object.keys(announcements).length : 0 }} / {{ otherPlayers ? otherPlayers.length + 1 : 0 }})...
         </div>
         <div v-else-if="hasScissors" class="turn-indicator my-turn">
           <img src="@/assets/images/TimeBomb/Cartes/Ciseaux.svg" alt="Ciseaux" class="ui-scissors-icon" /> 
@@ -108,8 +108,8 @@
         Annonce envoyée. En attente des autres joueurs...
       </div>
       <div v-else class="my-announcement">
-        Vous avez annoncé : <strong>{{ announcements[myName].defuses }} <img src="@/assets/images/TimeBomb/Cartes/Desamorceur.svg" alt="Désamorceurs" class="announce-icon" /></strong> 
-        <strong v-if="announcements[myName].hasBomb"> et <img src="@/assets/images/TimeBomb/Cartes/Bombe.svg" alt="Bombe" class="announce-icon" /></strong>
+        Vous avez annoncé : <strong>{{ announcements && myName && announcements[myName] ? announcements[myName].defuses : 0 }} <img src="@/assets/images/TimeBomb/Cartes/Desamorceur.svg" alt="Désamorceurs" class="announce-icon" /></strong> 
+        <strong v-if="announcements && myName && announcements[myName]?.hasBomb"> et <img src="@/assets/images/TimeBomb/Cartes/Bombe.svg" alt="Bombe" class="announce-icon" /></strong>
       </div>
 
       <TransitionGroup name="deal-me" tag="div" class="my-hand">
@@ -125,28 +125,47 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import TimeBombCard from './TimeBombCard.vue'
 import GameLogChat from './GameLogChat.vue' 
 
-const props = defineProps({
-  roomCode: String,
-  round: Number,
-  defusesLeft: Number,
-  cutsLeft: Number,
-  announcements: Object,
-  myName: String,
-  myRole: String, 
-  myRoleCard: String,
-  myHand: Array,
-  hasScissors: Boolean,
-  otherPlayers: Array,
-  gameMessages: Array,
-  isRedistributing: Boolean,
-  protectedPlayerId: String,
-  allAnnounced: Boolean
-});
+interface Player {
+  id: string;
+  name: string;
+  hand?: Card[];
+  hasScissors?: boolean;
+}
+
+interface GameMessage {
+  type: string;
+  text: string;
+  sender?: string;
+  timestamp: Date;
+}
+
+interface Card {
+  type: string;
+  isRevealed: boolean;
+}
+
+const props = defineProps<{
+  roomCode?: string;
+  round?: number;
+  defusesLeft?: number;
+  cutsLeft?: number;
+  announcements?: Record<string, { defuses: number, hasBomb: boolean }>;
+  myName?: string;
+  myRole?: string | null;
+  myRoleCard?: string;
+  myHand?: Card[];
+  hasScissors?: boolean;
+  otherPlayers?: Player[];
+  gameMessages?: GameMessage[];
+  isRedistributing?: boolean;
+  protectedPlayerId?: string | null;
+  allAnnounced?: boolean;
+}>();
 
 const emit = defineEmits(['cut', 'chatSend', 'announce']);
 
@@ -158,26 +177,29 @@ watch(() => props.round, () => {
   announceBomb.value = false;
 });
 
-const hasAnnounced = computed(() => !!props.announcements[props.myName]);
-const unrevealedCardsCount = computed(() => props.myHand.filter(c => !c.isRevealed).length);
+const hasAnnounced = computed(() => props.announcements && props.myName ? !!props.announcements[props.myName] : false);
+const unrevealedCardsCount = computed(() => props.myHand ? props.myHand.filter((c: Card) => !c.isRevealed).length : 0);
 
 const totalAnnouncedDefuses = computed(() => {
+  if (!props.announcements) return 0;
   return Object.values(props.announcements).reduce((sum, a) => sum + a.defuses, 0);
 });
 const totalAnnouncedBombs = computed(() => {
+  if (!props.announcements) return 0;
   return Object.values(props.announcements).filter(a => a.hasBomb).length;
 });
 
 const currentPlayerWithScissors = computed(() => {
-  const player = props.otherPlayers.find(p => p.hasScissors);
+  if (!props.otherPlayers) return 'un joueur';
+  const player = props.otherPlayers.find((p: Player) => p.hasScissors);
   return player ? player.name : 'un joueur';
 });
 
-const handleChatSend = (text) => {
+const handleChatSend = (text: string) => {
   emit('chatSend', text);
 }
 
-const getRoleCardImageUrl = (roleCardName) => {
+const getRoleCardImageUrl = (roleCardName?: string) => {
   if (!roleCardName) return new URL('../../assets/images/TimeBomb/Roles/Sherlock1.svg', import.meta.url).href;
   return new URL(`../../assets/images/TimeBomb/Roles/${roleCardName}.svg`, import.meta.url).href;
 }

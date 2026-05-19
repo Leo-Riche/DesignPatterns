@@ -41,7 +41,7 @@
         <div class="revealed-roles">
           <h4>Identités Révélées :</h4>
           <ul>
-            <li v-for="p in finalPlayers" :key="p.name" :class="p.role.toLowerCase()">
+            <li v-for="p in finalPlayers" :key="p.name" :class="p.role?.toLowerCase()">
               👤 <strong>{{ p.name }}</strong> était {{ p.role }}
             </li>
           </ul>
@@ -87,7 +87,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
@@ -99,32 +99,48 @@ const route = useRoute()
 const router = useRouter()
 const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 const socket = io(socketUrl)
-const roomCode = route.params.id
+const roomCode = route.params.id as string
+
+interface Player {
+  id: string;
+  name: string;
+  isHost?: boolean;
+  role?: string;
+  roleCard?: string;
+  hand?: { type: string, isRevealed: boolean }[];
+}
+
+interface GameMessage {
+  type: string;
+  text: string;
+  sender?: string;
+  timestamp: Date;
+}
 
 const gameStatus = ref('waiting')
-const allConnectedPlayers = ref([])
+const allConnectedPlayers = ref<Player[]>([])
 const amIHost = ref(false)
 
 const round = ref(1)
 const defusesLeft = ref(0)
 const cutsLeft = ref(0)
-const announcements = ref({})
+const announcements = ref<Record<string, { defuses: number, hasBomb: boolean }>>({})
 const myName = ref('')
-const myRole = ref(null)
+const myRole = ref<string | null>(null)
 const myRoleCard = ref('')
-const myHand = ref([])
+const myHand = ref<any[]>([])
 const hasScissors = ref(false)
-const otherPlayers = ref([])
-const gameMessages = ref([])
+const otherPlayers = ref<Player[]>([])
+const gameMessages = ref<GameMessage[]>([])
 const isRedistributing = ref(false)
-const protectedPlayerId = ref(null)
+const protectedPlayerId = ref<string | null>(null)
 const allAnnounced = ref(false)
 
 const showResultsPopup = ref(true)
 
 const winner = ref('')
 const winReason = ref('')
-const finalPlayers = ref([]) 
+const finalPlayers = ref<Player[]>([]) 
 
 onMounted(() => {
   socket.on('connect', () => {
@@ -139,12 +155,12 @@ onMounted(() => {
     router.push('/');
   });
 
-  socket.on('update_players_list', (players) => {
+  socket.on('update_players_list', (players: Player[]) => {
     allConnectedPlayers.value = players;
-    const me = players.find(p => p.id === socket.id);
+    const me = players.find((p: Player) => p.id === socket.id);
     if (me) {
       if (me.name !== "En attente..." && me.name !== "Anonyme") myName.value = me.name;
-      amIHost.value = me.isHost;
+      amIHost.value = me.isHost || false;
     }
   });
 
@@ -195,17 +211,17 @@ onMounted(() => {
 
 const startGame = () => socket.emit('start_timebomb', roomCode);
 
-const handleAnnounce = ({ defuses, hasBomb }) => {
+const handleAnnounce = ({ defuses, hasBomb }: { defuses: number, hasBomb: boolean }) => {
   socket.emit('announce_cards', { roomCode, playerName: myName.value, defuses, hasBomb });
 }
 
-const handleCut = ({ targetId, cardIndex }) => {
+const handleCut = ({ targetId, cardIndex }: { targetId: string, cardIndex: number }) => {
   if (!hasScissors.value) return alert("Ce n'est pas ton tour !");
   if (isRedistributing.value) return; 
   socket.emit('cut_wire', { roomCode, targetId, cardIndex, shooterName: myName.value });
 }
 
-const handleChatSend = (text) => {
+const handleChatSend = (text: string) => {
   if (!text.trim()) return;
   socket.emit('send_player_chat', { roomCode, text: text, sender: myName.value });
 }

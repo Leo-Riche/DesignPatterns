@@ -1,11 +1,10 @@
-// server/index.js
-const express = require('express');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-const TimeBomb = require('./games/timebomb');
-const LoupGarou = require('./games/loupgarou');
-const Qwixx = require('./games/qwixx');
+import express from 'express';
+import { createServer } from 'http';
+import { Server, Socket } from 'socket.io';
+import cors from 'cors';
+import TimeBomb from './games/timebomb';
+import LoupGarou from './games/loupgarou';
+import Qwixx from './games/qwixx';
 
 const app = express();
 app.use(cors());
@@ -20,15 +19,15 @@ const io = new Server(httpServer, {
 });
 
 // STOCKAGE GLOBAL DES PARTIES
-const activeGames = {}; 
+const activeGames: Record<string, any> = {}; 
 
-const updateRoomPlayers = (roomCode) => {
+const updateRoomPlayers = (roomCode: string) => {
   const room = io.sockets.adapter.rooms.get(roomCode);
   if (!room) return;
 
   const clients = Array.from(room);
-  const playersInRoom = clients.map((id, index) => {
-    const s = io.sockets.sockets.get(id);
+  const playersInRoom = clients.map((id: string, index: number) => {
+    const s = io.sockets.sockets.get(id) as any;
     return {
       id: id,
       name: s?.playerName || "En attente...",
@@ -39,13 +38,13 @@ const updateRoomPlayers = (roomCode) => {
   io.to(roomCode).emit('update_players_list', playersInRoom);
 };
 
-io.on('connection', (socket) => {
+io.on('connection', (socket: Socket & { playerName?: string }) => {
   
-  socket.on('set_player_name', ({ name, roomCode }) => {
+  socket.on('set_player_name', ({ name, roomCode }: { name: string, roomCode: string }) => {
     const cleanRoomCode = roomCode.trim();
     const clients = Array.from(io.sockets.adapter.rooms.get(cleanRoomCode) || []);
 
-    const allSockets = Array.from(io.sockets.sockets.values());
+    const allSockets = Array.from(io.sockets.sockets.values()) as (Socket & { playerName?: string })[];
     const duplicate = allSockets.find(s => 
       s.playerName === name && s.id !== socket.id && s.rooms.has(cleanRoomCode)
     );
@@ -83,7 +82,7 @@ io.on('connection', (socket) => {
     setTimeout(() => { updateRoomPlayers(cleanRoomCode); }, 100);
   });
 
-  socket.on('start_timebomb', (roomCode) => {
+  socket.on('start_timebomb', (roomCode: string) => {
     const cleanRoomCode = roomCode.trim();
     const clients = Array.from(io.sockets.adapter.rooms.get(cleanRoomCode) || []);
 
@@ -92,8 +91,8 @@ io.on('connection', (socket) => {
     }
     
     const playersData = clients.map(id => {
-        const s = io.sockets.sockets.get(id);
-        return { id: id, name: s.playerName || "Anonyme" };
+        const s = io.sockets.sockets.get(id) as any;
+        return { id: id, name: s?.playerName || "Anonyme" };
     });
 
     const game = new TimeBomb(cleanRoomCode, playersData, io);
@@ -102,7 +101,7 @@ io.on('connection', (socket) => {
     game.start();
   });
 
-  socket.on('announce_cards', (data) => {
+  socket.on('announce_cards', (data: any) => {
     const { roomCode, playerName, defuses, hasBomb } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
@@ -112,7 +111,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('cut_wire', (data) => {
+  socket.on('cut_wire', (data: any) => {
     const { roomCode, targetId, cardIndex, shooterName } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode]; 
@@ -122,7 +121,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('start_loupgarou', (data) => {
+  socket.on('start_loupgarou', (data: any) => {
     const { roomCode, roleComposition } = typeof data === 'string' 
       ? { roomCode: data, roleComposition: null } 
       : data;
@@ -134,8 +133,8 @@ io.on('connection', (socket) => {
     }
     
     const playersData = clients.map(id => {
-        const s = io.sockets.sockets.get(id);
-        return { id: id, name: s.playerName || "Anonyme" };
+        const s = io.sockets.sockets.get(id) as any;
+        return { id: id, name: s?.playerName || "Anonyme" };
     });
 
     const game = new LoupGarou(cleanRoomCode, playersData, io, roleComposition);
@@ -145,7 +144,7 @@ io.on('connection', (socket) => {
     game.start();
   });
 
-  socket.on('loupgarou_action', (data) => {
+  socket.on('loupgarou_action', (data: any) => {
     const { roomCode, actionType, targetId } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
@@ -154,7 +153,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('start_qwixx', (roomCode) => {
+  socket.on('start_qwixx', (roomCode: string) => {
     const cleanRoomCode = roomCode.trim();
     const clients = Array.from(io.sockets.adapter.rooms.get(cleanRoomCode) || []);
 
@@ -163,8 +162,8 @@ io.on('connection', (socket) => {
     }
     
     const playersData = clients.map(id => {
-        const s = io.sockets.sockets.get(id);
-        return { id: id, name: s.playerName || "Anonyme" };
+        const s = io.sockets.sockets.get(id) as any;
+        return { id: id, name: s?.playerName || "Anonyme" };
     });
 
     const game = new Qwixx(cleanRoomCode, playersData, io);
@@ -173,7 +172,7 @@ io.on('connection', (socket) => {
     game.start();
   });
 
-  socket.on('qwixx_action', (data) => {
+  socket.on('qwixx_action', (data: any) => {
     const { roomCode, actionType, payload } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
@@ -182,14 +181,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('update_role_composition', (data) => {
+  socket.on('update_role_composition', (data: any) => {
     const { roomCode, roleComposition } = data;
     const cleanRoomCode = roomCode.trim();
     // Broadcast la composition à tous les joueurs de la room (sauf l'émetteur)
     socket.to(cleanRoomCode).emit('role_composition_updated', roleComposition);
   });
 
-  socket.on('send_player_chat', (data) => {
+  socket.on('send_player_chat', (data: any) => {
     const { roomCode, text, sender } = data;
     io.to(roomCode).emit('player_chat_message', { text, sender });
   });

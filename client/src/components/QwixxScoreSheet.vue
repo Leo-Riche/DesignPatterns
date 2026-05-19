@@ -91,7 +91,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -114,8 +114,8 @@ const hasCross = (color, value) => {
   return props.scoreSheet[color].includes(value); 
 }
 
-const isSelected = (color, value) => {
-  return props.selectedCells.some(c => c.color === color && c.value === value);
+const isSelected = (color: string, value: number) => {
+  return props.selectedCells.some((c: any) => c.color === color && c.value === value);
 }
 
 const isValidCombination = (color, value) => {
@@ -127,11 +127,11 @@ const isValidCombination = (color, value) => {
   // Enforce ordering rules
   const crossedArr = props.scoreSheet[color].filter(v => v !== 'lock');
   if (crossedArr.length > 0) {
-    const lastCrossed = crossedArr[crossedArr.length - 1]; // Assume array is sorted properly by server
+    const lastAction = crossedArr[crossedArr.length - 1] as any; // Assume array is sorted properly by server
     if (color === 'red' || color === 'yellow') {
-       if (value <= lastCrossed) return false;
+       if (value <= lastAction) return false;
     } else {
-       if (value >= lastCrossed) return false;
+       if (value >= lastAction) return false;
     }
   }
 

@@ -1,7 +1,14 @@
 // server/games/loupgarou.js
 
 class LoupGarou {
-  constructor(roomCode, playersData, io, roleComposition = null) {
+  roomCode: string;
+  players: any[];
+  io: any;
+  state: any;
+  roleComposition?: any[];
+  timer: any;
+
+  constructor(roomCode: string, playersData: any[], io: any, roleComposition: any[] | null = null) {
     this.roomCode = roomCode;
     this.io = io;
     this.roleComposition = roleComposition; // Composition custom envoyée par le host
@@ -31,8 +38,6 @@ class LoupGarou {
       nightVictims: [],
       votes: {},
       mayorVotes: {},
-      logs: [],
-      timeLeft: 0,
       logs: [],
       timeLeft: 0,
       deadHunterId: null,
@@ -453,7 +458,8 @@ class LoupGarou {
     if (Object.keys(this.state.mayorVotes).length > 0) {
       let maxVotes = 0;
       let targetCandidates = [];
-      for (const [targetId, count] of Object.entries(this.state.mayorVotes)) {
+      for (const [targetId, countVal] of Object.entries(this.state.mayorVotes)) {
+        const count = countVal as number;
         if (count > maxVotes) {
           maxVotes = count;
           targetCandidates = [targetId];
@@ -498,7 +504,8 @@ class LoupGarou {
     let maxVotes = 0;
     let victims = [];
     
-    for (const [targetId, count] of Object.entries(this.state.votes)) {
+    for (const [targetId, countVal] of Object.entries(this.state.votes)) {
+      const count = countVal as number;
       if (count > maxVotes) {
         maxVotes = count;
         victims = [targetId];
@@ -719,4 +726,4 @@ class LoupGarou {
   }
 }
 
-module.exports = LoupGarou;
+export default LoupGarou;

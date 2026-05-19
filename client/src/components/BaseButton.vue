@@ -11,7 +11,7 @@
   </button>
 </template>
 
-<script setup>
+<script setup lang="ts">
 defineProps({
   variant: { type: String, default: 'secondary' },
   disabled: { type: Boolean, default: false }

@@ -103,7 +103,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
@@ -113,7 +113,7 @@ import LoupGarouActiveBoard from './LoupGarouActiveBoard.vue'
 const route = useRoute()
 const router = useRouter()
 
-const roomCode = route.params.id
+const roomCode = route.params.id as string
 const myName = ref('')
 const players = ref([])
 const gameStatus = ref('waiting')

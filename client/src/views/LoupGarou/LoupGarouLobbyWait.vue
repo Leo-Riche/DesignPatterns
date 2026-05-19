@@ -6,7 +6,7 @@
     </button>
     
     <div class="players-list-container">
-      <h3>Joueurs connectés ({{ players.length }}) :</h3>
+      <h3>Joueurs connectés ({{ players ? players.length : 0 }}) :</h3>
       <ul class="players-list">
         <li v-for="p in players" :key="p.id" :class="{ 'is-me': p.id === socketId }">
           👤 {{ p.name }} {{ p.id === socketId ? '(Moi)' : '' }}
@@ -65,16 +65,16 @@
     </div>
 
     <div v-if="amIHost" class="launch-section">
-      <p v-if="players.length < 2" class="info-msg">
+      <p v-if="players && players.length < 2" class="info-msg">
         Attends au moins un autre joueur...
       </p>
       <p v-if="totalRoles !== targetRolesCount && totalRoles > 0" class="info-msg warning-msg">
         ⚠️ Le nombre de rôles sélectionné ({{ totalRoles }}) ne correspond pas à ce qui est attendu ({{ targetRolesCount }}).
-        <span v-if="targetRolesCount !== players.length"><br><em>Note : Le Voleur requiert 2 cartes supplémentaires.</em></span>
+        <span v-if="players && targetRolesCount !== players.length"><br><em>Note : Le Voleur requiert 2 cartes supplémentaires.</em></span>
       </p>
       <BaseButton 
         variant="primary" 
-        :disabled="players.length < 2 || totalRoles !== targetRolesCount" 
+        :disabled="players ? players.length < 2 || totalRoles !== targetRolesCount : true" 
         @click="launchGame"
       >
         LANCER LA PARTIE 🚀
@@ -87,7 +87,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import BaseButton from '@/components/BaseButton.vue'
 import { ref, computed, watch } from 'vue';
 
@@ -109,13 +109,19 @@ const copyJoinLink = async () => {
   }
 }
 
-const props = defineProps({
-  roomCode: String,
-  players: Array,
-  socketId: String,
-  amIHost: Boolean,
-  roleComposition: { type: Array, default: () => [] }
-});
+interface Player {
+  id: string;
+  name: string;
+  isHost?: boolean;
+}
+
+const props = defineProps<{
+  roomCode?: string;
+  players?: Player[];
+  socketId?: string;
+  amIHost?: boolean;
+  roleComposition?: string[];
+}>();
 
 const emit = defineEmits(['start', 'update-composition']);
 
@@ -153,22 +159,22 @@ const roleCategories = [
 // Mapping d'images — import dynamique Vite
 const roleImages = import.meta.glob('@/assets/images/LoupGarou/Roles/*.svg', { eager: true, query: '?url', import: 'default' });
 
-const getRoleImageUrl = (filename) => {
+const getRoleImageUrl = (filename: string) => {
   const key = `/src/assets/images/LoupGarou/Roles/${filename}`;
-  return roleImages[key] || '';
+  return (roleImages as any)[key] || '';
 };
 
 // ========== GESTION DE LA COMPOSITION ==========
 
 // Map local des rôles sélectionnés : { roleId: count }
-const localComposition = ref({});
+const localComposition = ref<Record<string, number>>({});
 
 // Synchroniser avec la prop roleComposition (pour les non-host)
 watch(() => props.roleComposition, (newVal) => {
   if (!props.amIHost && newVal && newVal.length > 0) {
     // Reconstruire le map depuis le tableau
-    const map = {};
-    newVal.forEach(roleId => {
+    const map: Record<string, number> = {};
+    newVal.forEach((roleId: string) => {
       map[roleId] = (map[roleId] || 0) + 1;
     });
     localComposition.value = map;
@@ -176,7 +182,7 @@ watch(() => props.roleComposition, (newVal) => {
 }, { immediate: true, deep: true });
 
 const selectedRolesMap = computed(() => {
-  const filtered = {};
+  const filtered: Record<string, number> = {};
   for (const [key, val] of Object.entries(localComposition.value)) {
     if (val > 0) filtered[key] = val;
   }
@@ -187,15 +193,16 @@ const totalRoles = computed(() => {
   return Object.values(localComposition.value).reduce((sum, c) => sum + c, 0);
 });
 
-const getRoleCount = (roleId) => {
+const getRoleCount = (roleId: string) => {
   return localComposition.value[roleId] || 0;
 };
 
 const targetRolesCount = computed(() => {
+  if (!props.players) return 0;
   return props.players.length + (getRoleCount('Voleur') > 0 ? 2 : 0);
 });
 
-const getRoleDisplayName = (roleId) => {
+const getRoleDisplayName = (roleId: string) => {
   for (const cat of roleCategories) {
     const found = cat.roles.find(r => r.id === roleId);
     if (found) return found.name;
@@ -204,7 +211,7 @@ const getRoleDisplayName = (roleId) => {
 };
 
 const compositionToArray = () => {
-  const arr = [];
+  const arr: string[] = [];
   for (const [roleId, count] of Object.entries(localComposition.value)) {
     for (let i = 0; i < count; i++) {
       arr.push(roleId);
@@ -213,7 +220,7 @@ const compositionToArray = () => {
   return arr;
 };
 
-const incrementRole = (roleId) => {
+const incrementRole = (roleId: string) => {
   if (!localComposition.value[roleId]) {
     localComposition.value[roleId] = 0;
   }
@@ -221,7 +228,7 @@ const incrementRole = (roleId) => {
   emitComposition();
 };
 
-const decrementRole = (roleId) => {
+const decrementRole = (roleId: string) => {
   if (localComposition.value[roleId] && localComposition.value[roleId] > 0) {
     localComposition.value[roleId]--;
     if (localComposition.value[roleId] === 0) {

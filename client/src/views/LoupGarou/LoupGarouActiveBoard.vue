@@ -152,7 +152,7 @@
                 <img :src="getRoleImageUrlByName(cardRole)" :alt="cardRole" @error="handleImageError"/>
              </div>
              <p class="card-role-name">{{ cardRole }}</p>
-             <button class="action-btn" @click="emitAction('voleur_choose', idx)">Prendre</button>
+             <button class="action-btn" @click="emitAction('voleur_choose', idx.toString())">Prendre</button>
            </div>
         </div>
         <p v-if="mustVoleurSwap" class="warning-text">⚠️ Tu es obligé d'échanger car les deux cartes sont des Loups !</p>
@@ -195,36 +195,49 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-const props = defineProps({
-  roomCode: String,
-  status: String,
-  phase: String,
-  turn: Number,
-  winner: String,
-  myName: String,
-  myRole: String,
-  isAlive: Boolean,
-  isMayor: Boolean,
-  isLover: Boolean,
-  isInfected: Boolean,
-  faction: String,
-  potions: Object,
-  nightVictims: Array,
-  players: Array,
-  votes: Object,
-  centerCards: Array,
-  logs: Array,
-  timeLeft: Number
-});
+interface Player {
+  id: string;
+  name: string;
+  role?: string;
+  isAlive?: boolean;
+  isMayor?: boolean;
+  isLover?: boolean;
+  hasVoted?: boolean;
+  isReady?: boolean;
+  isInfected?: boolean;
+  faction?: string;
+}
+
+const props = defineProps<{
+  roomCode?: string;
+  status?: string;
+  phase?: string;
+  turn?: number;
+  winner?: string;
+  myName?: string;
+  myRole?: string;
+  isAlive?: boolean;
+  isMayor?: boolean;
+  isLover?: boolean;
+  isInfected?: boolean;
+  faction?: string;
+  potions?: any;
+  nightVictims?: string[];
+  players: Player[];
+  votes?: Record<string, number>;
+  centerCards?: string[];
+  logs?: string[];
+  timeLeft?: number;
+}>();
 
 const emit = defineEmits(['action']);
 
-const me = computed(() => props.players.find(p => p.name === props.myName) || {});
+const me = computed(() => props.players.find(p => p.name === props.myName) || {} as Player);
 
-const isWolfString = (roleString) => {
+const isWolfString = (roleString?: string) => {
   if (!roleString || roleString === '???') return false;
   const wolves = ['Loup-Garou', 'Loup Garou Blanc', 'Loup Garou Voyant', 'Grand Méchant Loup', 'Infect Père des Loups'];
   return wolves.includes(roleString) || roleString.includes('(Infecté)') || roleString === 'Chien-Loup';
@@ -248,7 +261,7 @@ const isMyTurn = computed(() => {
 });
 
 // Pour Cupidon
-const cupidonSelection = ref([]);
+const cupidonSelection = ref<string[]>([]);
 
 // Écouter si la phase change pour clean la sélection si besoin
 watch(() => props.phase, () => {
@@ -257,7 +270,7 @@ watch(() => props.phase, () => {
 
 const phaseDisplayName = computed(() => {
   if (props.status === 'finished') return "PARTIE TERMINÉE";
-  const names = {
+  const names: Record<string, string> = {
     'lobby': "En attente...",
     'voleur': "Le Voleur observe son butin",
     'cupidon': "Cupidon choisit les amoureux",
@@ -295,7 +308,7 @@ const actionButtonText = computed(() => {
   return 'Agir';
 });
 
-const canTarget = (player) => {
+const canTarget = (player: Player) => {
   if (!isMyTurn.value || !player.isAlive) return false;
   
   if (props.phase === 'voyante' && props.myRole === 'Voyante' && player.name !== props.myName) return true;
@@ -311,7 +324,7 @@ const canTarget = (player) => {
   return false;
 };
 
-const canWitchKill = (player) => {
+const canWitchKill = (player: Player) => {
   return isMyTurn.value && 
          props.phase === 'sorciere' && 
          props.myRole === 'Sorciere' && 
@@ -320,11 +333,11 @@ const canWitchKill = (player) => {
          player.name !== props.myName;
 };
 
-const emitAction = (actionType, targetId) => {
+const emitAction = (actionType: string | null, targetId: string | string[] | null) => {
   emit('action', { actionType, targetId });
 };
 
-const toggleCupidonTarget = (id) => {
+const toggleCupidonTarget = (id: string) => {
   if (cupidonSelection.value.includes(id)) {
     cupidonSelection.value = cupidonSelection.value.filter(item => item !== id);
   } else if (cupidonSelection.value.length < 2) {
@@ -338,12 +351,12 @@ const confirmCupidonChoice = () => {
   }
 };
 
-const getPlayerName = (id) => {
+const getPlayerName = (id: string) => {
   const p = props.players.find(p => p.id === id);
   return p ? p.name : 'Inconnu';
 };
 
-const getRoleImageFilename = (role) => {
+const getRoleImageFilename = (role?: string) => {
   if (!role || role === '???') return 'Villageois.svg';
   let filename = role.replace(/[\s-]/g, '');
   if (role === 'Sorciere' || role === 'Sorcière') filename = 'Sociere'; // Keep your specific typo logic here
@@ -357,7 +370,7 @@ const myRoleImageUrl = computed(() => {
   return new URL(`../../assets/images/LoupGarou/Roles/${getRoleImageFilename(props.myRole)}`, import.meta.url).href;
 });
 
-const getRoleImageUrlByName = (role) => {
+const getRoleImageUrlByName = (role?: string) => {
   if (!role) return '';
   return new URL(`../../assets/images/LoupGarou/Roles/${getRoleImageFilename(role)}`, import.meta.url).href;
 };
@@ -370,7 +383,7 @@ const mustVoleurSwap = computed(() => {
   return false;
 });
 
-const handleImageError = (e) => {
+const handleImageError = (e: any) => {
   // Fallback si l'image du rôle n'existe pas
   e.target.src = new URL(`../../assets/images/LoupGarou/Roles/Villageois.svg`, import.meta.url).href;
 };
