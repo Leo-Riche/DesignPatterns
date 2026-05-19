@@ -1,10 +1,9 @@
-import express from 'express';
-import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
-import cors from 'cors';
-import TimeBomb from './games/timebomb';
-import LoupGarou from './games/loupgarou';
-import Qwixx from './games/qwixx';
+// server/index.js
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const { GameFactory } = require('./games/GameFactory');
 
 const app = express();
 app.use(cors());
@@ -95,9 +94,9 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
         return { id: id, name: s?.playerName || "Anonyme" };
     });
 
-    const game = new TimeBomb(cleanRoomCode, playersData, io);
+    const game = GameFactory.create('timebomb', cleanRoomCode, playersData, io);
     activeGames[cleanRoomCode] = game;
-    
+
     game.start();
   });
 
@@ -137,7 +136,7 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
         return { id: id, name: s?.playerName || "Anonyme" };
     });
 
-    const game = new LoupGarou(cleanRoomCode, playersData, io, roleComposition);
+    const game = GameFactory.create('loupgarou', cleanRoomCode, playersData, io, { roleComposition });
     activeGames[cleanRoomCode] = game;
     
     io.to(cleanRoomCode).emit('game_started');
@@ -148,7 +147,7 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
     const { roomCode, actionType, targetId } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
-    if (game && game instanceof LoupGarou) {
+    if (game) {
       game.handleAction(socket.id, actionType, targetId);
     }
   });
@@ -166,7 +165,7 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
         return { id: id, name: s?.playerName || "Anonyme" };
     });
 
-    const game = new Qwixx(cleanRoomCode, playersData, io);
+    const game = GameFactory.create('qwixx', cleanRoomCode, playersData, io);
     activeGames[cleanRoomCode] = game;
     
     game.start();
@@ -176,7 +175,7 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
     const { roomCode, actionType, payload } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
-    if (game && game instanceof Qwixx) {
+    if (game) {
       game.handleAction(socket.id, actionType, payload);
     }
   });
