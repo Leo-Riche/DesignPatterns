@@ -1,6 +1,9 @@
 import { ITimeBombPhase, ITimeBombContext } from './states/ITimeBombPhase';
 import { AnnouncementPhase } from './states/AnnouncementPhase';
 import { FinishedPhase } from './states/FinishedPhase';
+import { ITimeBombObserver } from './observer/ITimeBombObserver';
+import { TimeBombNetworkObserver } from './observer/TimeBombNetworkObserver';
+import { Server } from 'socket.io';
 
 const availableSherlockCards = ['Sherlock1', 'Sherlock2', 'Sherlock3', 'Sherlock4', 'Sherlock5', 'Sherlock1', 'Sherlock2'];
 const availableMoriartyCards = ['Moriarty1', 'Moriarty2', 'Moriarty3', 'Moriarty1'];
@@ -13,18 +16,26 @@ export const shuffle = (array: any[]) => {
   return array;
 };
 
+/**
+ * Patron Observateur (Observer Pattern) - Sujet (Subject)
+ *
+ * TimeBomb est le "Sujet" : il maintient une liste d'observateurs
+ * et les notifie de chaque événement de jeu. Il ne connaît PAS
+ * Socket.io directement — c'est le rôle du TimeBombNetworkObserver.
+ */
 export class TimeBomb implements ITimeBombContext {
   roomCode: string;
   players: any[];
-  io: any;
   state: any;
   private currentPhase!: ITimeBombPhase;
 
-  constructor(roomCode: string, playersData: any[], io: any) {
+  /** La liste des observateurs inscrits */
+  private observers: ITimeBombObserver[] = [];
+
+  constructor(roomCode: string, playersData: any[], io: Server) {
     this.roomCode = roomCode;
-    this.io = io;
-    this.players = playersData; 
-    
+    this.players = playersData;
+
     this.state = {
       round: 1,
       turnCuts: 0,
@@ -36,72 +47,78 @@ export class TimeBomb implements ITimeBombContext {
       announcements: {},
       players: []
     };
+
+    // On inscrit automatiquement l'observateur réseau
+    this.addObserver(new TimeBombNetworkObserver(io, roomCode));
   }
+
+  // ─── Gestion des Observateurs ─────────────────────────────────────────────
+
+  addObserver(observer: ITimeBombObserver): void {
+    this.observers.push(observer);
+  }
+
+  removeObserver(observer: ITimeBombObserver): void {
+    this.observers = this.observers.filter(o => o !== observer);
+  }
+
+  /** Notifie tous les observateurs d'un message de log */
+  log(message: string): void {
+    this.observers.forEach(obs => obs.onActionLog(message));
+  }
+
+  // ─── Logique de jeu ──────────────────────────────────────────────────────
 
   start() {
     const nbPlayers = this.players.length;
     this.state.announcements = {};
-    
-    // 1. Logique des rôles
-    let nbSherlock, nbMoriarty;
+
+    let nbSherlock: number, nbMoriarty: number;
     if (nbPlayers >= 4 && nbPlayers <= 5) {
-      nbSherlock = 3; nbMoriarty = 2; 
+      nbSherlock = 3; nbMoriarty = 2;
     } else if (nbPlayers === 6) {
-      nbSherlock = 4; nbMoriarty = 2; 
+      nbSherlock = 4; nbMoriarty = 2;
     } else if (nbPlayers >= 7 && nbPlayers <= 8) {
-      nbSherlock = 5; nbMoriarty = 3; 
-    }
-    else if (nbPlayers === 9) {
-      nbMoriarty = Math.random() < 0.5 ? 3 : 4; 
+      nbSherlock = 5; nbMoriarty = 3;
+    } else if (nbPlayers === 9) {
+      nbMoriarty = Math.random() < 0.5 ? 3 : 4;
       nbSherlock = nbPlayers - nbMoriarty;
     } else if (nbPlayers === 10) {
-      nbSherlock = 6; nbMoriarty = 4; 
-    } 
-    else {
+      nbSherlock = 6; nbMoriarty = 4;
+    } else {
       nbMoriarty = Math.floor(nbPlayers / 2);
       nbSherlock = nbPlayers - nbMoriarty;
     }
 
     const shuffledSherlocks = shuffle([...availableSherlockCards]);
     const shuffledMoriartys = shuffle([...availableMoriartyCards]);
-
     const selectedSherlocks = shuffledSherlocks.slice(0, nbSherlock);
     const selectedMoriartys = shuffledMoriartys.slice(0, nbMoriarty);
+    const assignedRoleCards = shuffle([...selectedSherlocks, ...selectedMoriartys]).slice(0, nbPlayers);
 
-    const finalRoleCardsPool = [...selectedSherlocks, ...selectedMoriartys];
-    const assignedRoleCards = shuffle(finalRoleCardsPool).slice(0, nbPlayers);
-    
     let deck = ['bomb'];
-    
-    for (let i = 0; i < nbPlayers; i++) {
-      deck.push('defuse');
-    }
-    
+    for (let i = 0; i < nbPlayers; i++) deck.push('defuse');
     const totalCards = nbPlayers * 5;
-    while (deck.length < totalCards) {
-      deck.push('wire');
-    }
-    
+    while (deck.length < totalCards) deck.push('wire');
     deck = shuffle(deck);
 
     const startingPlayerIndex = Math.floor(Math.random() * nbPlayers);
 
-    // 3. Distribution initiale (Manche 1)
     this.state.players = this.players.map((p: any, index: number) => {
       const specificRoleCard = assignedRoleCards[index];
       const roleType = specificRoleCard.startsWith('Sherlock') ? 'Sherlock' : 'Moriarty';
-
       return {
         id: p.id,
         name: p.name,
-        role: roleType,            
-        roleCard: specificRoleCard, 
-        hand: deck.splice(0, 5).map(type => ({ type: type, isRevealed: false })),
-        hasScissors: index === startingPlayerIndex 
+        role: roleType,
+        roleCard: specificRoleCard,
+        hand: deck.splice(0, 5).map((type: string) => ({ type, isRevealed: false })),
+        hasScissors: index === startingPlayerIndex
       };
     });
 
-    this.io.to(this.roomCode).emit('game_started');
+    // Notifie les observateurs que la partie commence
+    this.observers.forEach(obs => obs.onGameStarted());
     this.setPhase(new AnnouncementPhase(this));
     this.broadcastState();
   }
@@ -118,34 +135,31 @@ export class TimeBomb implements ITimeBombContext {
 
   startNextRound() {
     this.state.round++;
-    
+
     if (this.state.round > 4) {
       return this.endGame('Moriarty', '⏳ Le temps est écoulé, la bombe explose !');
     }
 
     let newDeck: string[] = [];
     this.state.players.forEach((p: any) => {
-      p.hand.forEach((c: any) => {
-        if (!c.isRevealed) newDeck.push(c.type);
-      });
-      p.hand = []; 
+      p.hand.forEach((c: any) => { if (!c.isRevealed) newDeck.push(c.type); });
+      p.hand = [];
     });
 
     newDeck = shuffle(newDeck);
-
     const cardsPerPlayer = newDeck.length / this.state.players.length;
     this.state.players.forEach((p: any) => {
-      p.hand = newDeck.splice(0, cardsPerPlayer).map(type => ({ type, isRevealed: false }));
+      p.hand = newDeck.splice(0, cardsPerPlayer).map((type: string) => ({ type, isRevealed: false }));
     });
 
-    this.state.turnCuts = 0; 
+    this.state.turnCuts = 0;
     this.state.isRedistributing = false;
     this.state.lastShooterId = null;
     this.state.announcements = {};
 
     const playerWithScissors = this.state.players.find((p: any) => p.hasScissors);
     const scissorsHolderName = playerWithScissors ? playerWithScissors.name : "Quelqu'un";
-    this.io.to(this.roomCode).emit('action_log', `Manche ${this.state.round} démarrée. Les ciseaux sont chez ${scissorsHolderName} !`);
+    this.log(`Manche ${this.state.round} démarrée. Les ciseaux sont chez ${scissorsHolderName} !`);
 
     this.setPhase(new AnnouncementPhase(this));
     this.broadcastState();
@@ -157,14 +171,15 @@ export class TimeBomb implements ITimeBombContext {
     this.state.players.forEach((p: any) => {
       p.hand.forEach((c: any) => c.isRevealed = true);
     });
-    
+
     const revealedPlayers = this.state.players.map((p: any) => ({
       name: p.name,
       role: p.role
     }));
 
-    this.broadcastState(); 
-    this.io.to(this.roomCode).emit('game_over', { winner, reason, players: revealedPlayers });
+    this.broadcastState();
+    // Notifie les observateurs de la fin de partie
+    this.observers.forEach(obs => obs.onGameOver({ winner, reason, players: revealedPlayers }));
   }
 
   broadcastState() {
@@ -180,7 +195,7 @@ export class TimeBomb implements ITimeBombContext {
           hand: p.hand.map((c: any) => c.isRevealed ? c : { type: 'hidden', isRevealed: false })
         }));
 
-      this.io.to(player.id).emit('update_board_state', {
+      const data = {
         round: this.state.round,
         defusesLeft: this.state.totalDefuses - this.state.defusesFound,
         cutsLeft: this.state.players.length - this.state.turnCuts,
@@ -193,15 +208,16 @@ export class TimeBomb implements ITimeBombContext {
         isRedistributing: this.state.isRedistributing,
         protectedPlayerId: this.state.lastShooterId,
         allAnnounced: allAnnounced
-      });
+      };
+
+      // Notifie chaque observateur avec l'état spécifique au joueur
+      this.observers.forEach(obs => obs.onPlayerStateUpdate(player.id, data));
     });
   }
 
   reconnectPlayer(newSocketId: string, playerName: string) {
     if (this.state.status !== 'playing') return false;
-
     const player = this.state.players.find((p: any) => p.name === playerName);
-    
     if (player) {
       player.id = newSocketId;
       return true;
@@ -209,4 +225,3 @@ export class TimeBomb implements ITimeBombContext {
     return false;
   }
 }
-
