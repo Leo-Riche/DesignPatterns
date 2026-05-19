@@ -118,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { io } from 'socket.io-client'
 import QwixxScoreSheet from '@/components/QwixxScoreSheet.vue'
@@ -143,6 +143,8 @@ interface Cell {
   source?: string;
 }
 
+import { GameStateManager } from '@/patterns/state'
+
 // Waiting Room State
 const allConnectedPlayers = ref<Player[]>([])
 const amIHost = ref(false)
@@ -160,6 +162,31 @@ const myId = ref<string | null>(null)
 const gameLogs = ref<string[]>([])
 const animatingDice = ref(false)
 const selectedCells = ref<Cell[]>([])
+
+// State
+const stateContext = reactive<any>({
+  phase: phase.value,
+  dice: dice.value,
+  lockedColors: lockedColors.value,
+  players: players.value,
+  activePlayerId: activePlayerId.value,
+  readyPlayers: readyPlayers.value,
+  myId: myId.value,
+  nextState: null,
+  eventBus: {
+    emit(ev: string, payload: any) {
+      if (ev === 'state:changed') {
+        phase.value = payload.to;
+        if (payload.to === 'deciding') {
+          animatingDice.value = true;
+          setTimeout(() => { animatingDice.value = false; }, 500);
+        }
+      }
+    }
+  }
+})
+
+const stateManager = new GameStateManager(stateContext)
 
 // End Game
 const winReason = ref('')
@@ -317,6 +344,27 @@ onMounted(() => {
        }
     }
 
+     // Sync stateContext used by GameStateManager
+     stateContext.dice = data.dice;
+     stateContext.lockedColors = data.lockedColors;
+     stateContext.players = data.players;
+     stateContext.activePlayerId = data.activePlayerId;
+     stateContext.readyPlayers = data.readyPlayers;
+     stateContext.myId = data.myId;
+
+    // If server signals a dice roll completed, dispatch 'rolled' so RollingState can handle it
+    if (data.phase === 'deciding' && data.dice) {
+      try { stateManager.dispatch('rolled', data.dice); } catch (e) {}
+    }
+
+    // If server signals finished, ensure manager transitions to finished
+    if (data.phase === 'finished') {
+      try { stateManager.requestTransition('finished'); } catch (e) {}
+    } else {
+      try { stateManager.requestTransition(data.phase); } catch (e) {}
+    }
+
+    // Still update reactive refs for existing UI bindings
     phase.value = data.phase;
     dice.value = data.dice;
     lockedColors.value = data.lockedColors;
@@ -332,6 +380,8 @@ onMounted(() => {
   });
 
   socket.on('game_over', (data) => {
+    // Ensure state manager transitions to finished
+    try { stateManager.requestTransition('finished'); } catch (e) {}
     gameStatus.value = 'finished';
     winReason.value = data.reason;
     finalPlayers.value = data.players;
@@ -348,29 +398,27 @@ const copyLink = () => {
   });
 }
 
-const startGame = () => socket.emit('start_qwixx', roomCode);
+const startGame = () => {
+  // local state update
+  try { stateManager.dispatch('start'); } catch (e) {}
+  socket.emit('start_qwixx', roomCode);
+}
 
 const rollDice = () => {
+  // Local immediate transition to give instant feedback
+  try { stateManager.requestTransition('rolling'); } catch (e) {}
   socket.emit('qwixx_action', { roomCode, actionType: 'roll' });
 }
 
 const submitTurn = (takePenalty: boolean) => {
   if (takePenalty && !isActivePlayer.value) return; // Cannot take penalty if not active
-  
-  if (takePenalty) {
-    socket.emit('qwixx_action', { 
-       roomCode, actionType: 'submit_turn', payload: { actions: [], penalty: true } 
-    });
-  } else {
-    // If active player passes without anything, they get a penalty? No, UI blocks it unless they press "PENALTY" explicitly.
-    // Actually, passing your turn as active player with 0 checkboxes IS a penalty. 
-    // They clicked "PASSER MON TOUR". If they are active, it's a penalty.
-    const isPenalty = isActivePlayer.value && selectedCells.value.length === 0;
 
-    socket.emit('qwixx_action', { 
-      roomCode, actionType: 'submit_turn', payload: { actions: selectedCells.value.map(c => ({...c})), penalty: isPenalty } 
-    });
-  }
+  const payload = takePenalty ? { actions: [], penalty: true } : { actions: selectedCells.value.map(c => ({ ...c })), penalty: (isActivePlayer.value && selectedCells.value.length === 0) };
+
+  // Optimistic local resolution: let the state manager know the turn was resolved
+  try { stateManager.dispatch('resolved', payload); } catch (e) {}
+
+  socket.emit('qwixx_action', { roomCode, actionType: 'submit_turn', payload });
 }
 
 </script>

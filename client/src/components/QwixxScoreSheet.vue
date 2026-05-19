@@ -93,6 +93,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { PropType } from 'vue'
+import ClassicValidationStrategy from '../patterns/strategy/ClassicValidationStrategy'
+import type { IValidationStrategy } from '../patterns/strategy/IValidationStrategy'
 
 const props = defineProps({
   playerName: String,
@@ -103,6 +106,8 @@ const props = defineProps({
   isActivePlayer: Boolean,
   selectedCells: Array, // [{color, value, source}] (managed by parent)
   isMainPlayer: { type: Boolean, default: false }
+  ,
+  validationStrategy: { type: Object as PropType<IValidationStrategy>, default: () => new ClassicValidationStrategy() }
 })
 
 const emit = defineEmits(['toggle-cell'])
@@ -119,33 +124,13 @@ const isSelected = (color: string, value: number) => {
 }
 
 const isValidCombination = (color, value) => {
-  if (!props.dice || props.readOnly) return false;
-  
-  // Can't select already crossed or locked colors
-  if (hasCross(color, value) || props.lockedColors[color]) return false;
-
-  // Enforce ordering rules
-  const crossedArr = props.scoreSheet[color].filter(v => v !== 'lock');
-  if (crossedArr.length > 0) {
-    const lastAction = crossedArr[crossedArr.length - 1] as any; // Assume array is sorted properly by server
-    if (color === 'red' || color === 'yellow') {
-       if (value <= lastAction) return false;
-    } else {
-       if (value >= lastAction) return false;
-    }
-  }
-
-  // Lock rule constraint (must have >= 5 previous crosses to cross 12/2)
-  const isLastBox = (color === 'red' || color === 'yellow') ? value === 12 : value === 2;
-  if (isLastBox && crossedArr.length < 5) return false;
-
-  // Let parent handle white/color summation combination validation, 
-  // but we can pre-check if it's AT LEAST mathematically possible to click it right now.
-  const wSum = props.dice.w1 + props.dice.w2;
-  const cSum1 = props.dice.w1 + props.dice[color];
-  const cSum2 = props.dice.w2 + props.dice[color];
-
-  return value === wSum || (props.isActivePlayer && (value === cSum1 || value === cSum2));
+  if (props.readOnly) return false;
+  return props.validationStrategy.isValidCombination({
+    dice: props.dice,
+    scoreSheet: props.scoreSheet,
+    lockedColors: props.lockedColors,
+    isActivePlayer: props.isActivePlayer
+  }, color, value)
 }
 
 const getCellClass = (color, value) => {
