@@ -1,9 +1,9 @@
 import { Server } from 'socket.io';
 import { IGame, PlayerData, GameOptions, GameConstructor } from './IGame';
 
-const TimeBomb: GameConstructor = require('./timebomb');
-const LoupGarou: GameConstructor = require('./loupgarou');
-const Qwixx: GameConstructor = require('./qwixx');
+import TimeBomb from './timebomb';
+import LoupGarou from './loupgarou';
+import Qwixx from './qwixx';
 
 export type GameType = 'timebomb' | 'loupgarou' | 'qwixx';
 

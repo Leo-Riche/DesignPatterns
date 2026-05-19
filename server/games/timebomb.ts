@@ -11,11 +11,105 @@ const shuffle = (array) => {
   return array;
 };
 
+interface ITimeBombPhase {
+  handleAction(playerId: string, actionType: string, payload: any): void;
+}
+
+class AnnouncementPhase implements ITimeBombPhase {
+  constructor(private game: TimeBomb) {}
+
+  handleAction(playerId: string, actionType: string, payload: any) {
+    if (actionType === 'announce') {
+      const { defuses, hasBomb } = payload;
+      const player = this.game.state.players.find((p: any) => p.id === playerId);
+      if (!player) return;
+
+      this.game.state.announcements[player.name] = { defuses, hasBomb };
+      
+      const allAnnounced = Object.keys(this.game.state.announcements).length === this.game.state.players.length;
+      
+      if (allAnnounced) {
+        for (const [name, annVal] of Object.entries(this.game.state.announcements)) {
+          const ann = annVal as any;
+          const bombText = ann.hasBomb ? " et prétend avoir la BOMBE 💥" : "";
+          this.game.io.to(this.game.roomCode).emit('action_log', `📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
+        }
+        this.game.setPhase(new PlayingPhase(this.game));
+      }
+      this.game.broadcastState();
+    }
+  }
+}
+
+class PlayingPhase implements ITimeBombPhase {
+  constructor(private game: TimeBomb) {}
+
+  handleAction(playerId: string, actionType: string, payload: any) {
+    if (actionType === 'cut') {
+      const { targetId, cardIndex } = payload;
+      
+      if (this.game.state.status !== 'playing') return;
+      if (this.game.state.isRedistributing) return;
+  
+      const currentShooter = this.game.state.players.find((p: any) => p.hasScissors);
+      if (!currentShooter || currentShooter.id !== playerId) return;
+  
+      if (targetId === this.game.state.lastShooterId) return;
+  
+      const targetPlayer = this.game.state.players.find((p: any) => p.id === targetId);
+      const card = targetPlayer.hand[cardIndex];
+  
+      if (card.isRevealed) return;
+  
+      // 1. On révèle la carte
+      card.isRevealed = true;
+      this.game.state.turnCuts++;
+  
+      // 2. On mémorise l'ID du tireur AVANT de transférer les ciseaux
+      this.game.state.lastShooterId = currentShooter.id;
+  
+      // 3. Transfert des ciseaux
+      this.game.state.players.forEach((p: any) => p.hasScissors = false);
+      targetPlayer.hasScissors = true;
+  
+      this.game.io.to(this.game.roomCode).emit('action_log', `${currentShooter.name} a coupé chez ${targetPlayer.name} !`);
+  
+      // 4. Vérification des conditions de victoire
+      if (card.type === 'bomb') {
+        this.game.endGame('Moriarty', '💥 BOUM ! La bombe a explosé.');
+        return;
+      } else if (card.type === 'defuse') {
+        this.game.state.defusesFound++;
+        if (this.game.state.defusesFound === this.game.state.totalDefuses) {
+          this.game.endGame('Sherlock', '✅ Tous les câbles ont été désamorcés !');
+          return;
+        }
+      }
+  
+      // 5. Vérification de fin de manche
+      if (this.game.state.turnCuts === this.game.state.players.length) {
+        this.game.state.isRedistributing = true;
+        this.game.io.to(this.game.roomCode).emit('action_log', `Fin de la manche ${this.game.state.round}. Redistribution...`);
+        setTimeout(() => this.game.startNextRound(), 2500);
+      } 
+  
+      this.game.broadcastState();
+    }
+  }
+}
+
+class FinishedPhase implements ITimeBombPhase {
+  handleAction(playerId: string, actionType: string, payload: any) {
+    // La partie est terminée, aucune action n'est permise
+  }
+}
+
 class TimeBomb {
   roomCode: string;
   players: any[];
   io: any;
   state: any;
+  private currentPhase!: ITimeBombPhase;
 
   constructor(roomCode: string, playersData: any[], io: any) {
     this.roomCode = roomCode;
@@ -99,72 +193,18 @@ class TimeBomb {
     });
 
     this.io.to(this.roomCode).emit('game_started');
+    this.setPhase(new AnnouncementPhase(this));
     this.broadcastState();
   }
 
-  handleCut(targetId, cardIndex, shooterName) {
-    if (this.state.status !== 'playing') return;
-    if (this.state.isRedistributing) return;
-
-    if (Object.keys(this.state.announcements).length < this.state.players.length) return;
-
-    const currentShooter = this.state.players.find(p => p.hasScissors);
-    if (!currentShooter) return;
-
-    if (targetId === this.state.lastShooterId) return;
-
-    const targetPlayer = this.state.players.find(p => p.id === targetId);
-    const card = targetPlayer.hand[cardIndex];
-
-    if (card.isRevealed) return;
-
-    // 1. On révèle la carte
-    card.isRevealed = true;
-    this.state.turnCuts++;
-
-    // 2. On mémorise l'ID du tireur AVANT de transférer les ciseaux
-    this.state.lastShooterId = currentShooter.id;
-
-    // 3. Transfert des ciseaux
-    this.state.players.forEach(p => p.hasScissors = false);
-    targetPlayer.hasScissors = true;
-
-    this.io.to(this.roomCode).emit('action_log', `${shooterName} a coupé chez ${targetPlayer.name} !`);
-
-    // 4. Vérification des conditions de victoire
-    if (card.type === 'bomb') {
-      return this.endGame('Moriarty', '💥 BOUM ! La bombe a explosé.');
-    } else if (card.type === 'defuse') {
-      this.state.defusesFound++;
-      if (this.state.defusesFound === this.state.totalDefuses) {
-        return this.endGame('Sherlock', '✅ Tous les câbles ont été désamorcés !');
-      }
-    }
-
-    // 5. Vérification de fin de manche
-    if (this.state.turnCuts === this.state.players.length) {
-      this.state.isRedistributing = true;
-      this.io.to(this.roomCode).emit('action_log', `Fin de la manche ${this.state.round}. Redistribution...`);
-      setTimeout(() => this.startNextRound(), 2500);
-    } 
-
-    this.broadcastState();
+  setPhase(newPhase: ITimeBombPhase) {
+    this.currentPhase = newPhase;
   }
 
-  handleAnnouncement(playerName, defuses, hasBomb) {
-    this.state.announcements[playerName] = { defuses, hasBomb };
-    
-    const allAnnounced = Object.keys(this.state.announcements).length === this.state.players.length;
-    
-    if (allAnnounced) {
-      for (const [name, annVal] of Object.entries(this.state.announcements)) {
-        const ann = annVal as any;
-        const bombText = ann.hasBomb ? " et prétend avoir la BOMBE 💥" : "";
-        this.io.to(this.roomCode).emit('action_log', `📣 ${name} annonce : ${ann.defuses} câble(s) de désamorçage${bombText}.`);
-      }
+  handleAction(playerId: string, actionType: string, payload?: any): void {
+    if (this.currentPhase) {
+      this.currentPhase.handleAction(playerId, actionType, payload);
     }
-    
-    this.broadcastState();
   }
 
   startNextRound() {
@@ -194,14 +234,16 @@ class TimeBomb {
     this.state.lastShooterId = null;
     this.state.announcements = {};
 
-    const playerWithScissors = this.state.players.find(p => p.hasScissors);
+    const playerWithScissors = this.state.players.find((p: any) => p.hasScissors);
     const scissorsHolderName = playerWithScissors ? playerWithScissors.name : "Quelqu'un";
     this.io.to(this.roomCode).emit('action_log', `Manche ${this.state.round} démarrée. Les ciseaux sont chez ${scissorsHolderName} !`);
 
+    this.setPhase(new AnnouncementPhase(this));
     this.broadcastState();
   }
 
-  endGame(winner, reason) {
+  endGame(winner: string, reason: string) {
+    this.setPhase(new FinishedPhase());
     this.state.status = 'finished';
     this.state.players.forEach(p => {
       p.hand.forEach(c => c.isRevealed = true);

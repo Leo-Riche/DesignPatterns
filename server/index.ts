@@ -101,22 +101,22 @@ io.on('connection', (socket: Socket & { playerName?: string }) => {
   });
 
   socket.on('announce_cards', (data: any) => {
-    const { roomCode, playerName, defuses, hasBomb } = data;
+    const { roomCode, defuses, hasBomb } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode];
     
     if (game) {
-      game.handleAnnouncement(playerName, defuses, hasBomb);
+      game.handleAction(socket.id, 'announce', { defuses, hasBomb });
     }
   });
 
   socket.on('cut_wire', (data: any) => {
-    const { roomCode, targetId, cardIndex, shooterName } = data;
+    const { roomCode, targetId, cardIndex } = data;
     const cleanRoomCode = roomCode.trim();
     const game = activeGames[cleanRoomCode]; 
     
     if (game) {
-      game.handleCut(targetId, cardIndex, shooterName);
+      game.handleAction(socket.id, 'cut', { targetId, cardIndex });
     }
   });
 
